@@ -29,6 +29,8 @@ class RecordFormat(Enum):
     VINYL = "Vinyl"
     CD = "CD"
     CASSETTE = "Cassette"
+    FILE = "File"
+    LATHE_CUT = "Lathe Cut"
 
 
 class Condition(Enum):

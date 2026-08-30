@@ -7,7 +7,12 @@ testable without a network connection.
 
 from __future__ import annotations
 
-from orub.discogs.models import DiscogsFormatDTO, DiscogsReleaseDTO, DiscogsTrackDTO
+from orub.discogs.models import (
+    DiscogsArtistDTO,
+    DiscogsFormatDTO,
+    DiscogsReleaseDTO,
+    DiscogsTrackDTO,
+)
 from orub.domain.catalog import Release, Track
 from orub.domain.identity import ArtistId, LabelId, ReleaseId, TrackId, TrackPosition
 from orub.domain.result import Err, Ok, Result
@@ -17,6 +22,8 @@ _FORMAT_BY_DISCOGS_NAME = {
     "Vinyl": RecordFormat.VINYL,
     "CD": RecordFormat.CD,
     "Cassette": RecordFormat.CASSETTE,
+    "File": RecordFormat.FILE,
+    "Lathe Cut": RecordFormat.LATHE_CUT,
 }
 
 
@@ -26,12 +33,21 @@ def _record_format(formats: list[DiscogsFormatDTO]) -> RecordFormat | None:
     return _FORMAT_BY_DISCOGS_NAME.get(formats[0].name)
 
 
+def _artist_ids(artists: list[DiscogsArtistDTO]) -> tuple[ArtistId, ...]:
+    # Discogs sometimes credits the same artist twice on one release/track,
+    # e.g. a Latin-script name and a transliteration joined by "=" on
+    # Japanese-market releases -- both entries carry the same id. Dedupe
+    # (order-preserving) so persistence doesn't violate the (release,
+    # track, artist) unique constraint on track_artist_ids.
+    return tuple(dict.fromkeys(ArtistId(a.id) for a in artists))
+
+
 def _track_from_dto(
     dto: DiscogsTrackDTO, release_id: ReleaseId, release_artist_ids: tuple[ArtistId, ...]
 ) -> Track | None:
     if dto.type != "track" or not dto.position:
         return None
-    artist_ids = tuple(ArtistId(a.id) for a in dto.artists) if dto.artists else release_artist_ids
+    artist_ids = _artist_ids(dto.artists) if dto.artists else release_artist_ids
     return Track(
         id=TrackId(release_id=release_id, position=TrackPosition(dto.position)),
         title=dto.title,
@@ -49,7 +65,7 @@ def release_from_dto(dto: DiscogsReleaseDTO) -> Result[Release, str]:
         return Err(f"release {dto.id}: has no label")
 
     release_id = ReleaseId(dto.id)
-    release_artist_ids = tuple(ArtistId(a.id) for a in dto.artists)
+    release_artist_ids = _artist_ids(dto.artists)
     tracklist = tuple(
         track
         for raw_track in dto.tracklist

@@ -11,7 +11,13 @@ def test_condition_has_8_discogs_grades() -> None:
 
 
 def test_record_format_members() -> None:
-    assert {member.value for member in RecordFormat} == {"Vinyl", "CD", "Cassette"}
+    assert {member.value for member in RecordFormat} == {
+        "Vinyl",
+        "CD",
+        "Cassette",
+        "File",
+        "Lathe Cut",
+    }
 
 
 def test_musical_key_has_24_camelot_positions() -> None:
