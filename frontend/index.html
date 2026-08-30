@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>orub</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --fg: #d8d8d0;
+            --dim: #7a7a72;
+            --line: #33332e;
+            --panel: #121210;
+            --accent: #ffb000;
+            --warn: #d94f2b;
+            --mono: ui-monospace, "SF Mono", Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: var(--mono);
+        }
+
+        .app {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 32px 16px;
+        }
+
+        .title {
+            font-size: 14px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin: 0 0 16px;
+            font-weight: 400;
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .search-form {
+            display: grid;
+            gap: 12px;
+        }
+
+        .field {
+            display: grid;
+            gap: 4px;
+        }
+
+        .field-label {
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+
+        .field-input {
+            background: var(--bg);
+            border: 1px solid var(--line);
+            color: var(--fg);
+            font-family: var(--mono);
+            font-size: 13px;
+            padding: 8px;
+            border-radius: 0;
+            outline: none;
+            transition: border-color 100ms linear;
+        }
+
+        .field-input:focus {
+            border-color: var(--accent);
+        }
+
+        .submit-btn {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-family: var(--mono);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 0;
+            transition: background-color 100ms linear, color 100ms linear;
+        }
+
+        .submit-btn:hover {
+            background: var(--accent);
+            color: var(--bg);
+        }
+
+        .status-line {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-line.loading {
+            color: var(--dim);
+        }
+
+        .status-line.loading::after {
+            content: "";
+            animation: blink 1s steps(1) infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .status-line.error {
+            color: var(--warn);
+        }
+
+        .tag {
+            border: 1px solid var(--fg);
+            padding: 2px 6px;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .tag.warn {
+            border-color: var(--warn);
+            color: var(--warn);
+        }
+
+        .release {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .release-title {
+            font-size: 14px;
+        }
+
+        .release-meta {
+            font-size: 11px;
+            color: var(--dim);
+        }
+
+        .candidates .status-line {
+            margin-bottom: 12px;
+        }
+
+        .candidate-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .candidate-table th {
+            text-align: left;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--dim);
+            border-bottom: 1px solid var(--line);
+            padding: 6px 8px;
+        }
+
+        .candidate-table td {
+            border-bottom: 1px solid var(--line);
+            padding: 6px 8px;
+        }
+
+        .candidate-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .add-btn {
+            background: transparent;
+            border: 1px solid var(--fg);
+            color: var(--fg);
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 0;
+            transition: background-color 100ms linear, color 100ms linear, border-color 100ms linear;
+        }
+
+        .add-btn:hover {
+            background: var(--fg);
+            color: var(--bg);
+        }
+
+        .add-btn.error {
+            border-color: var(--warn);
+            color: var(--warn);
+        }
+
+        .add-btn.error:hover {
+            background: var(--warn);
+            color: var(--bg);
+        }
+
+        .dim {
+            color: var(--dim);
+            font-size: 11px;
+        }
+
+        .discogs-link {
+            color: var(--dim);
+            text-decoration: none;
+            border: 1px solid var(--line);
+            padding: 2px 6px;
+            transition: color 100ms linear, border-color 100ms linear;
+        }
+
+        .discogs-link:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    <script src="main.js"></script>
+    <script>
+        Elm.Main.init({ node: document.getElementById("app") });
+    </script>
+</body>
+</html>
