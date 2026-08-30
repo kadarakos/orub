@@ -9,7 +9,15 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "attrs>=26.1.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2.0.52",
+    "typer>=0.27.2",
 ]
+
+[project.scripts]
+orub = "orub.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.11.11,<0.12.0"]
@@ -21,6 +29,7 @@ dev = [
     "pyright>=1.1.411",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
     "ruff>=0.16.5",
 ]
 
