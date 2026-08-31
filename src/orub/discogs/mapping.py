@@ -7,6 +7,8 @@ testable without a network connection.
 
 from __future__ import annotations
 
+import attrs
+
 from orub.discogs.models import (
     DiscogsArtistDTO,
     DiscogsFormatDTO,
@@ -77,8 +79,32 @@ def release_from_dto(dto: DiscogsReleaseDTO) -> Result[Release, str]:
             id=release_id,
             title=dto.title,
             label_id=LabelId(dto.labels[0].id),
-            year=dto.year or 0,
+            year=dto.year,
             format=record_format,
             tracklist=tracklist,
         )
+    )
+
+
+@attrs.frozen(slots=True)
+class DiscogsTagHints:
+    """Discogs-supplied categorical vocabulary for a release, grouped the
+    way it'll be surfaced as tags -- one tuple per reserved tag category
+    (genre/style/format). Not part of `Release` itself: these become
+    `Tag` rows via a get-or-create step at persistence time, not domain
+    catalog fields.
+    """
+
+    genres: tuple[str, ...] = ()
+    styles: tuple[str, ...] = ()
+    format_descriptions: tuple[str, ...] = ()
+
+
+def tag_hints_from_dto(dto: DiscogsReleaseDTO) -> DiscogsTagHints:
+    return DiscogsTagHints(
+        genres=tuple(dto.genres),
+        styles=tuple(dto.styles),
+        format_descriptions=tuple(
+            description for fmt in dto.formats for description in fmt.descriptions
+        ),
     )

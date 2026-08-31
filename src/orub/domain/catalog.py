@@ -41,6 +41,6 @@ class Release:
     id: ReleaseId
     title: str
     label_id: LabelId
-    year: int
+    year: int | None
     format: RecordFormat
     tracklist: tuple[Track, ...]

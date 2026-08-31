@@ -23,6 +23,7 @@ class DiscogsLabelDTO(BaseModel):
 
 class DiscogsFormatDTO(BaseModel):
     name: str
+    descriptions: list[str] = []
 
 
 class DiscogsTrackDTO(BaseModel):
@@ -40,6 +41,8 @@ class DiscogsReleaseDTO(BaseModel):
     year: int | None = None
     formats: list[DiscogsFormatDTO]
     tracklist: list[DiscogsTrackDTO]
+    genres: list[str] = []
+    styles: list[str] = []
 
 
 class DiscogsSearchResultDTO(BaseModel):

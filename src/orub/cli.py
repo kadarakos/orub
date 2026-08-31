@@ -16,6 +16,7 @@ from orub.config import Settings
 from orub.db.repository import existing_release as lookup_existing_release
 from orub.db.repository import save_release
 from orub.db.session import make_engine
+from orub.db.tags import apply_discogs_tag_hints
 from orub.discogs.client import DiscogsClient
 from orub.discogs.errors import FetchError, MalformedResponse, NetworkError, RateLimited
 from orub.discogs.ingest import ReleaseSearchQuery, ingest_release_by_id, ingest_release_by_search
@@ -24,6 +25,7 @@ from orub.domain.catalog import Release
 from orub.domain.identity import ReleaseId
 from orub.domain.ingest_outcome import AlreadyExists, AmbiguousMatch, Created, NotFound
 from orub.domain.result import Err, Ok, Result
+from orub.domain.user import DEFAULT_USER_ID
 
 app = typer.Typer()
 
@@ -38,7 +40,8 @@ def _open_session(settings: Settings) -> Session:
 
 
 def _describe_release(release: Release) -> str:
-    return f"{release.title} ({release.year}, {release.format.value}) [id={release.id.value}]"
+    year = release.year if release.year is not None else "?"
+    return f"{release.title} ({year}, {release.format.value}) [id={release.id.value}]"
 
 
 def _describe_candidate(candidate: DiscogsSearchResultDTO) -> str:
@@ -79,12 +82,14 @@ def ingest_release(release_id: int) -> None:
             case Err(error=error):
                 _echo_fetch_error(error)
                 raise typer.Exit(code=1)
-            case Ok(value=outcome):
-                match outcome:
+            case Ok(value=ingest_result):
+                match ingest_result.outcome:
                     case Created(value=release):
                         save_release(session, release)
+                        apply_discogs_tag_hints(session, DEFAULT_USER_ID, ingest_result.tag_hints)
                         typer.echo(f"Created: {_describe_release(release)}")
                     case AlreadyExists(value=release):
+                        apply_discogs_tag_hints(session, DEFAULT_USER_ID, ingest_result.tag_hints)
                         typer.echo(f"Already exists: {_describe_release(release)}")
                     case AmbiguousMatch():
                         typer.echo("Ambiguous match")
@@ -143,12 +148,14 @@ def search_release(
             case Err(error=error):
                 _echo_fetch_error(error)
                 raise typer.Exit(code=1)
-            case Ok(value=outcome):
-                match outcome:
+            case Ok(value=ingest_result):
+                match ingest_result.outcome:
                     case Created(value=release):
                         save_release(session, release)
+                        apply_discogs_tag_hints(session, DEFAULT_USER_ID, ingest_result.tag_hints)
                         typer.echo(f"Created: {_describe_release(release)}")
                     case AlreadyExists(value=release):
+                        apply_discogs_tag_hints(session, DEFAULT_USER_ID, ingest_result.tag_hints)
                         typer.echo(f"Already exists: {_describe_release(release)}")
                     case AmbiguousMatch(candidates=candidates):
                         typer.echo(

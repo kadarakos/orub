@@ -231,6 +231,182 @@
             color: var(--accent);
             border-color: var(--accent);
         }
+
+        .added-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            color: var(--dim);
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 0;
+            margin-bottom: 16px;
+            cursor: pointer;
+            transition: color 100ms linear;
+        }
+
+        .back-btn:hover {
+            color: var(--accent);
+        }
+
+        .add-details {
+            display: grid;
+            gap: 16px;
+        }
+
+        .field-input.small {
+            padding: 4px 6px;
+            font-size: 12px;
+            width: 80px;
+        }
+
+        select.field-input {
+            appearance: none;
+        }
+
+        .track-table {
+            margin-top: 4px;
+        }
+
+        .track-table select.field-input.small {
+            width: 60px;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 2px 4px 2px 8px;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+        }
+
+        .chip-remove {
+            background: transparent;
+            border: none;
+            color: var(--accent);
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: 12px;
+            line-height: 1;
+            padding: 2px 4px;
+        }
+
+        .chip-remove:hover {
+            color: var(--warn);
+        }
+
+        .tag-picker {
+            gap: 6px;
+        }
+
+        .tag-matches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag-match {
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--fg);
+            font-family: var(--mono);
+            font-size: 11px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: border-color 100ms linear, color 100ms linear;
+        }
+
+        .tag-match:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .create-tag {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .browse-toggle {
+            justify-self: start;
+            background: transparent;
+            border: none;
+            color: var(--dim);
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 0;
+            cursor: pointer;
+            transition: color 100ms linear;
+        }
+
+        .browse-toggle:hover {
+            color: var(--accent);
+        }
+
+        .tag-browse {
+            display: grid;
+            gap: 10px;
+            border: 1px solid var(--line);
+            padding: 10px;
+        }
+
+        .tag-browse-category-name {
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 6px;
+        }
+
+        .tag-browse-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag-browse-tag {
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--fg);
+            font-family: var(--mono);
+            font-size: 11px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: border-color 100ms linear, color 100ms linear;
+        }
+
+        .tag-browse-tag:hover {
+            border-color: var(--accent);
+        }
+
+        .tag-browse-tag.selected {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .save-area {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>

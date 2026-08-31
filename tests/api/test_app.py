@@ -117,7 +117,12 @@ def test_search_reports_not_found(client: TestClient) -> None:
     response = client.post("/releases/search", json={"release_title": "asdkjaslkdj999"})
 
     assert response.status_code == 200
-    assert response.json() == {"status": "not_found", "release": None, "candidates": None}
+    assert response.json() == {
+        "status": "not_found",
+        "release": None,
+        "candidates": None,
+        "suggested_tag_ids": None,
+    }
 
 
 @respx.mock
@@ -165,4 +170,153 @@ def test_ingest_reports_not_found(client: TestClient) -> None:
     response = client.post("/releases/999999999/ingest")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "not_found", "release": None, "candidates": None}
+    assert response.json() == {
+        "status": "not_found",
+        "release": None,
+        "candidates": None,
+        "suggested_tag_ids": None,
+    }
+
+
+_RELEASE_WITH_TRACKS_JSON = {
+    "id": 52382,
+    "title": "Feed Me Weird Things",
+    "artists": [{"id": 1, "name": "Squarepusher"}],
+    "labels": [{"id": 1, "name": "Rephlex"}],
+    "year": 1996,
+    "formats": [{"name": "Vinyl"}],
+    "tracklist": [
+        {"position": "A1", "title": "Tommib", "artists": [{"id": 1, "name": "Squarepusher"}]},
+        {"position": "A2", "title": "Kodack", "artists": [{"id": 1, "name": "Squarepusher"}]},
+    ],
+}
+
+
+@respx.mock
+def test_get_release_returns_404_before_ingest(client: TestClient) -> None:
+    response = client.get("/releases/52382")
+
+    assert response.status_code == 404
+
+
+@respx.mock
+def test_get_release_returns_detail_after_ingest(client: TestClient) -> None:
+    respx.get("https://api.discogs.com/releases/52382").mock(
+        return_value=httpx.Response(200, json=_RELEASE_WITH_TRACKS_JSON)
+    )
+    client.post("/releases/52382/ingest")
+
+    response = client.get("/releases/52382")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Feed Me Weird Things"
+    assert [t["position"] for t in body["tracks"]] == ["A1", "A2"]
+    assert body["tracks"][0]["bpm"] is None
+
+
+@respx.mock
+def test_edit_release_updates_year_and_track_fields(client: TestClient) -> None:
+    respx.get("https://api.discogs.com/releases/52382").mock(
+        return_value=httpx.Response(200, json=_RELEASE_WITH_TRACKS_JSON)
+    )
+    client.post("/releases/52382/ingest")
+
+    response = client.patch(
+        "/releases/52382",
+        json={"year": 1997, "tracks": [{"position": "A1", "bpm": 120.0, "key": "8A"}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["year"] == 1997
+    track_a1 = next(t for t in body["tracks"] if t["position"] == "A1")
+    assert track_a1["bpm"] == 120.0
+    assert track_a1["key"] == "8A"
+    track_a2 = next(t for t in body["tracks"] if t["position"] == "A2")
+    assert track_a2["bpm"] is None
+
+
+def test_edit_release_returns_404_for_unknown_release() -> None:
+    with TestClient(app) as client:
+        response = client.patch("/releases/1", json={"year": 2000, "tracks": []})
+
+    assert response.status_code == 404
+
+
+@respx.mock
+def test_edit_release_returns_400_for_unknown_track_position(client: TestClient) -> None:
+    respx.get("https://api.discogs.com/releases/52382").mock(
+        return_value=httpx.Response(200, json=_RELEASE_WITH_TRACKS_JSON)
+    )
+    client.post("/releases/52382/ingest")
+
+    response = client.patch(
+        "/releases/52382",
+        json={"year": 1997, "tracks": [{"position": "Z9", "bpm": 120.0}]},
+    )
+
+    assert response.status_code == 400
+
+
+@respx.mock
+def test_edit_release_returns_400_for_invalid_key(client: TestClient) -> None:
+    respx.get("https://api.discogs.com/releases/52382").mock(
+        return_value=httpx.Response(200, json=_RELEASE_WITH_TRACKS_JSON)
+    )
+    client.post("/releases/52382/ingest")
+
+    response = client.patch(
+        "/releases/52382",
+        json={"year": 1997, "tracks": [{"position": "A1", "key": "not-a-key"}]},
+    )
+
+    assert response.status_code == 400
+
+
+def test_create_and_list_tags(client: TestClient) -> None:
+    created = client.post("/tags", json={"category": "mood", "name": "Chill"})
+    assert created.status_code == 200
+    assert created.json()["name"] == "Chill"
+
+    listed = client.get("/tags")
+    assert listed.status_code == 200
+    categories = listed.json()
+    assert len(categories) == 1
+    assert categories[0]["name"] == "mood"
+    assert [t["name"] for t in categories[0]["tags"]] == ["Chill"]
+
+
+@respx.mock
+def test_create_collection_item(client: TestClient) -> None:
+    respx.get("https://api.discogs.com/releases/52382").mock(
+        return_value=httpx.Response(200, json=_RELEASE_WITH_TRACKS_JSON)
+    )
+    client.post("/releases/52382/ingest")
+    tag_id = client.post("/tags", json={"category": "mood", "name": "Chill"}).json()["id"]
+
+    response = client.post(
+        "/collection-items",
+        json={
+            "release_id": 52382,
+            "condition": "Mint (M)",
+            "notes": "sealed",
+            "tag_ids": [tag_id],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["release_id"] == 52382
+    assert body["condition"] == "Mint (M)"
+    assert body["tag_ids"] == [tag_id]
+
+
+def test_create_collection_item_returns_404_for_unknown_release() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/collection-items",
+            json={"release_id": 1, "condition": "Mint (M)"},
+        )
+
+    assert response.status_code == 404

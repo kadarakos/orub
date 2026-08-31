@@ -1,4 +1,4 @@
-from orub.discogs.mapping import release_from_dto
+from orub.discogs.mapping import release_from_dto, tag_hints_from_dto
 from orub.discogs.models import (
     DiscogsArtistDTO,
     DiscogsFormatDTO,
@@ -48,6 +48,14 @@ def test_maps_tracklist_inheriting_release_artists() -> None:
     assert len(tracks) == 2
     assert tracks[0].id == TrackId(ReleaseId(249504), TrackPosition("A"))
     assert tracks[0].artist_ids == (ArtistId(72872),)
+
+
+def test_missing_year_stays_none() -> None:
+    dto = _release_dto(year=None)
+    result = release_from_dto(dto)
+
+    assert isinstance(result, Ok)
+    assert result.value.year is None
 
 
 def test_track_level_artists_override_release_artists() -> None:
@@ -150,3 +158,38 @@ def test_missing_label_is_a_mapping_error() -> None:
     result = release_from_dto(dto)
 
     assert isinstance(result, Err)
+
+
+def test_tag_hints_collects_genres_styles_and_format_descriptions() -> None:
+    dto = _release_dto(
+        genres=["Electronic"],
+        styles=["IDM", "Drum n Bass", "Jungle", "Acid"],
+        formats=[DiscogsFormatDTO(name="CD", descriptions=["Album"])],
+    )
+
+    hints = tag_hints_from_dto(dto)
+
+    assert hints.genres == ("Electronic",)
+    assert hints.styles == ("IDM", "Drum n Bass", "Jungle", "Acid")
+    assert hints.format_descriptions == ("Album",)
+
+
+def test_tag_hints_defaults_to_empty_when_discogs_omits_them() -> None:
+    hints = tag_hints_from_dto(_release_dto())
+
+    assert hints.genres == ()
+    assert hints.styles == ()
+    assert hints.format_descriptions == ()
+
+
+def test_tag_hints_flattens_descriptions_across_multiple_formats() -> None:
+    dto = _release_dto(
+        formats=[
+            DiscogsFormatDTO(name="Vinyl", descriptions=['12"', "Album"]),
+            DiscogsFormatDTO(name="File", descriptions=["MP3"]),
+        ]
+    )
+
+    hints = tag_hints_from_dto(dto)
+
+    assert hints.format_descriptions == ('12"', "Album", "MP3")

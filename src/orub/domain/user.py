@@ -17,6 +17,11 @@ import attrs
 from orub.domain.identity import ReleaseId, TagCategoryId, TagId, TrackId, UserId
 from orub.domain.sums import Condition, EdgeSource
 
+# No auth yet (design doc §4.5, deferred) -- CLI and API both operate as this
+# single implicit user, same tolerance already applied to CORS/session
+# handling elsewhere. Revisit once real accounts exist.
+DEFAULT_USER_ID = UserId(1)
+
 
 @attrs.frozen(slots=True)
 class TagCategory:

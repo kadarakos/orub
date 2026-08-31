@@ -1,5 +1,11 @@
 from orub.discogs.errors import NetworkError
-from orub.discogs.ingest import ReleaseSearchQuery, ingest_release_by_id, ingest_release_by_search
+from orub.discogs.ingest import (
+    IngestResult,
+    ReleaseSearchQuery,
+    ingest_release_by_id,
+    ingest_release_by_search,
+)
+from orub.discogs.mapping import DiscogsTagHints
 from orub.discogs.models import (
     DiscogsArtistDTO,
     DiscogsFormatDTO,
@@ -37,6 +43,26 @@ def _no_existing_release(release_id: ReleaseId) -> Release | None:
     return None
 
 
+def _created(
+    release: Release, hints: DiscogsTagHints | None = None
+) -> IngestResult[Release, DiscogsSearchResultDTO]:
+    return IngestResult(Created(release), hints if hints is not None else DiscogsTagHints())
+
+
+def _already_exists(release: Release) -> IngestResult[Release, DiscogsSearchResultDTO]:
+    return IngestResult(AlreadyExists(release))
+
+
+def _not_found() -> IngestResult[Release, DiscogsSearchResultDTO]:
+    return IngestResult(NotFound())
+
+
+def _ambiguous(
+    *candidates: DiscogsSearchResultDTO,
+) -> IngestResult[Release, DiscogsSearchResultDTO]:
+    return IngestResult(AmbiguousMatch(candidates))
+
+
 def test_ingest_creates_new_release() -> None:
     result = ingest_release_by_id(
         fetch_release=lambda _: Ok(_DTO),
@@ -44,7 +70,7 @@ def test_ingest_creates_new_release() -> None:
         release_id=ReleaseId(249504),
     )
 
-    assert result == Ok(Created(_EXPECTED_RELEASE))
+    assert result == Ok(_created(_EXPECTED_RELEASE))
 
 
 def test_ingest_reports_already_exists() -> None:
@@ -54,7 +80,7 @@ def test_ingest_reports_already_exists() -> None:
         release_id=ReleaseId(249504),
     )
 
-    assert result == Ok(AlreadyExists(_EXPECTED_RELEASE))
+    assert result == Ok(_already_exists(_EXPECTED_RELEASE))
 
 
 def test_ingest_reports_not_found() -> None:
@@ -64,7 +90,42 @@ def test_ingest_reports_not_found() -> None:
         release_id=ReleaseId(1),
     )
 
-    assert result == Ok(NotFound())
+    assert result == Ok(_not_found())
+
+
+def test_ingest_extracts_tag_hints_from_dto() -> None:
+    dto_with_tags = DiscogsReleaseDTO(
+        id=249504,
+        title="Never Gonna Give You Up",
+        artists=[DiscogsArtistDTO(id=72872, name="Rick Astley")],
+        labels=[DiscogsLabelDTO(id=895, name="RCA")],
+        year=1987,
+        formats=[DiscogsFormatDTO(name="Vinyl", descriptions=["Single"])],
+        tracklist=[],
+        genres=["Pop"],
+        styles=["Synth-pop"],
+    )
+    result = ingest_release_by_id(
+        fetch_release=lambda _: Ok(dto_with_tags),
+        existing_release=_no_existing_release,
+        release_id=ReleaseId(249504),
+    )
+
+    assert result == Ok(
+        _created(
+            Release(
+                id=ReleaseId(249504),
+                title="Never Gonna Give You Up",
+                label_id=LabelId(895),
+                year=1987,
+                format=RecordFormat.VINYL,
+                tracklist=(),
+            ),
+            DiscogsTagHints(
+                genres=("Pop",), styles=("Synth-pop",), format_descriptions=("Single",)
+            ),
+        )
+    )
 
 
 def test_ingest_propagates_fetch_error() -> None:
@@ -109,7 +170,7 @@ def test_search_ingest_creates_release_on_unique_match() -> None:
         query=_QUERY,
     )
 
-    assert result == Ok(Created(_EXPECTED_RELEASE))
+    assert result == Ok(_created(_EXPECTED_RELEASE))
 
 
 def test_search_ingest_reports_already_exists_on_unique_match() -> None:
@@ -120,7 +181,7 @@ def test_search_ingest_reports_already_exists_on_unique_match() -> None:
         query=_QUERY,
     )
 
-    assert result == Ok(AlreadyExists(_EXPECTED_RELEASE))
+    assert result == Ok(_already_exists(_EXPECTED_RELEASE))
 
 
 def test_search_ingest_reports_ambiguous_match_on_multiple_results() -> None:
@@ -131,7 +192,7 @@ def test_search_ingest_reports_ambiguous_match_on_multiple_results() -> None:
         query=_QUERY,
     )
 
-    assert result == Ok(AmbiguousMatch((_SEARCH_RESULT, _OTHER_SEARCH_RESULT)))
+    assert result == Ok(_ambiguous(_SEARCH_RESULT, _OTHER_SEARCH_RESULT))
 
 
 def test_search_ingest_reports_not_found_on_no_results() -> None:
@@ -142,7 +203,7 @@ def test_search_ingest_reports_not_found_on_no_results() -> None:
         query=_QUERY,
     )
 
-    assert result == Ok(NotFound())
+    assert result == Ok(_not_found())
 
 
 def test_search_ingest_propagates_search_error() -> None:

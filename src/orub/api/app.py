@@ -1,15 +1,16 @@
 """FastAPI layer. See design doc §4.5, §8.
 
-Deliberately scoped to the search -> ingest flow for this slice, so the Elm
-frontend has something to talk to instead of calling Python directly. No
-auth yet -- single implicit user, same as the CLI; real auth waits for the
-user-owned-table slice of Phase 3, per TODO.md. Wires the same pure
-`ingest_release_by_search`/`ingest_release_by_id` pipelines the CLI uses,
-with `DiscogsClient` and a DB `Session` as the impure edge here instead of
-typer. `POST /releases/{id}/ingest` reuses `SearchResponse` as its response
-model (rather than a narrower type) even though it can never actually
-return "ambiguous" -- same tolerance the CLI's `ingest-release` command
-already applies to its unreachable `AmbiguousMatch` match arm.
+Covers the search -> ingest flow plus the "Add details" step that follows
+it: editing a release's year/track bpm/key, browsing/creating tags, and
+attaching a release to the user's collection. No auth yet -- single
+implicit user, same as the CLI; real auth waits for a later Phase 3 slice,
+per TODO.md. Wires the same pure `ingest_release_by_search`/
+`ingest_release_by_id` pipelines the CLI uses, with `DiscogsClient` and a
+DB `Session` as the impure edge here instead of typer. `POST
+/releases/{id}/ingest` reuses `SearchResponse` as its response model
+(rather than a narrower type) even though it can never actually return
+"ambiguous" -- same tolerance the CLI's `ingest-release` command already
+applies to its unreachable `AmbiguousMatch` match arm.
 """
 
 from __future__ import annotations
@@ -17,25 +18,37 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Literal
 
+import attrs
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from orub.config import Settings
+from orub.db.collection import save_collection_item
 from orub.db.repository import existing_release as lookup_existing_release
-from orub.db.repository import save_release
+from orub.db.repository import save_release, update_release
 from orub.db.session import make_engine
+from orub.db.tags import (
+    apply_discogs_tag_hints,
+    get_or_create_tag,
+    get_or_create_tag_category,
+    list_tag_categories,
+    list_tags,
+)
 from orub.discogs.client import DiscogsClient
 from orub.discogs.errors import FetchError, MalformedResponse, NetworkError, RateLimited
 from orub.discogs.ingest import ReleaseSearchQuery, ingest_release_by_id, ingest_release_by_search
 from orub.discogs.models import DiscogsSearchResultDTO
-from orub.domain.catalog import Release
-from orub.domain.identity import ReleaseId
+from orub.domain.catalog import Release, Track
+from orub.domain.identity import ReleaseId, TagId
 from orub.domain.ingest_outcome import AlreadyExists, AmbiguousMatch, Created, NotFound
 from orub.domain.result import Err, Ok, Result
+from orub.domain.sums import Bpm, Condition, MusicalKey
+from orub.domain.user import DEFAULT_USER_ID, CollectionItem
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +91,7 @@ class SearchRequest(BaseModel):
 class ReleaseResponse(BaseModel):
     id: int
     title: str
-    year: int
+    year: int | None
     format: str
 
 
@@ -94,11 +107,116 @@ class SearchResponse(BaseModel):
     status: Literal["created", "already_exists", "ambiguous", "not_found"]
     release: ReleaseResponse | None = None
     candidates: list[CandidateResponse] | None = None
+    suggested_tag_ids: list[int] | None = None
+
+
+class TrackResponse(BaseModel):
+    position: str
+    title: str
+    bpm: float | None
+    key: str | None
+
+
+class ReleaseDetailResponse(BaseModel):
+    id: int
+    title: str
+    year: int | None
+    format: str
+    tracks: list[TrackResponse]
+
+
+class TrackEditRequest(BaseModel):
+    position: str
+    bpm: float | None = None
+    key: str | None = None
+
+
+class ReleaseEditRequest(BaseModel):
+    year: int | None
+    tracks: list[TrackEditRequest] = []
+
+
+class TagResponse(BaseModel):
+    id: int
+    name: str
+
+
+class TagCategoryResponse(BaseModel):
+    id: int
+    name: str
+    tags: list[TagResponse]
+
+
+class CreateTagRequest(BaseModel):
+    category: str
+    name: str
+
+
+class CreateCollectionItemRequest(BaseModel):
+    release_id: int
+    condition: Condition
+    notes: str = ""
+    tag_ids: list[int] = []
+
+
+class CollectionItemResponse(BaseModel):
+    release_id: int
+    condition: str
+    notes: str
+    date_added: datetime
+    tag_ids: list[int]
 
 
 def _release_response(release: Release) -> ReleaseResponse:
     return ReleaseResponse(
         id=release.id.value, title=release.title, year=release.year, format=release.format.value
+    )
+
+
+def _release_detail_response(release: Release) -> ReleaseDetailResponse:
+    return ReleaseDetailResponse(
+        id=release.id.value,
+        title=release.title,
+        year=release.year,
+        format=release.format.value,
+        tracks=[
+            TrackResponse(
+                position=track.id.position.value,
+                title=track.title,
+                bpm=track.bpm.value if track.bpm is not None else None,
+                key=track.key.value if track.key is not None else None,
+            )
+            for track in release.tracklist
+        ],
+    )
+
+
+def _apply_release_edit(release: Release, body: ReleaseEditRequest) -> Result[Release, str]:
+    edits_by_position = {edit.position: edit for edit in body.tracks}
+    updated_tracks: list[Track] = []
+    for track in release.tracklist:
+        edit = edits_by_position.pop(track.id.position.value, None)
+        if edit is None:
+            updated_tracks.append(track)
+            continue
+        try:
+            bpm = Bpm(edit.bpm) if edit.bpm is not None else None
+            key = MusicalKey(edit.key) if edit.key is not None else None
+        except ValueError as error:
+            return Err(str(error))
+        updated_tracks.append(attrs.evolve(track, bpm=bpm, key=key))
+    if edits_by_position:
+        return Err(f"unknown track position(s): {sorted(edits_by_position)}")
+    return Ok(attrs.evolve(release, year=body.year, tracklist=tuple(updated_tracks)))
+
+
+def _collection_item_response(item: CollectionItem) -> CollectionItemResponse:
+    return CollectionItemResponse(
+        release_id=item.release_id.value,
+        condition=item.condition.value,
+        notes=item.notes,
+        date_added=item.date_added,
+        tag_ids=[tag_id.value for tag_id in item.tag_ids],
     )
 
 
@@ -165,14 +283,26 @@ def search_release(body: SearchRequest, http_request: Request) -> SearchResponse
             case Err(error=error):
                 logger.warning("search failed for query=%r: %s", query, error)
                 raise _fetch_error_to_http(error)
-            case Ok(value=outcome):
-                match outcome:
+            case Ok(value=ingest_result):
+                match ingest_result.outcome:
                     case Created(value=release):
                         save_release(session, release)
-                        return SearchResponse(status="created", release=_release_response(release))
-                    case AlreadyExists(value=release):
+                        tag_ids = apply_discogs_tag_hints(
+                            session, DEFAULT_USER_ID, ingest_result.tag_hints
+                        )
                         return SearchResponse(
-                            status="already_exists", release=_release_response(release)
+                            status="created",
+                            release=_release_response(release),
+                            suggested_tag_ids=[t.value for t in tag_ids],
+                        )
+                    case AlreadyExists(value=release):
+                        tag_ids = apply_discogs_tag_hints(
+                            session, DEFAULT_USER_ID, ingest_result.tag_hints
+                        )
+                        return SearchResponse(
+                            status="already_exists",
+                            release=_release_response(release),
+                            suggested_tag_ids=[t.value for t in tag_ids],
                         )
                     case AmbiguousMatch(candidates=candidates):
                         return SearchResponse(
@@ -204,14 +334,26 @@ def ingest_release(release_id: int, http_request: Request) -> SearchResponse:
             case Err(error=error):
                 logger.warning("ingest failed for release_id=%s: %s", release_id, error)
                 raise _fetch_error_to_http(error)
-            case Ok(value=outcome):
-                match outcome:
+            case Ok(value=ingest_result):
+                match ingest_result.outcome:
                     case Created(value=release):
                         save_release(session, release)
-                        return SearchResponse(status="created", release=_release_response(release))
-                    case AlreadyExists(value=release):
+                        tag_ids = apply_discogs_tag_hints(
+                            session, DEFAULT_USER_ID, ingest_result.tag_hints
+                        )
                         return SearchResponse(
-                            status="already_exists", release=_release_response(release)
+                            status="created",
+                            release=_release_response(release),
+                            suggested_tag_ids=[t.value for t in tag_ids],
+                        )
+                    case AlreadyExists(value=release):
+                        tag_ids = apply_discogs_tag_hints(
+                            session, DEFAULT_USER_ID, ingest_result.tag_hints
+                        )
+                        return SearchResponse(
+                            status="already_exists",
+                            release=_release_response(release),
+                            suggested_tag_ids=[t.value for t in tag_ids],
                         )
                     case AmbiguousMatch(candidates=candidates):
                         return SearchResponse(
@@ -220,3 +362,78 @@ def ingest_release(release_id: int, http_request: Request) -> SearchResponse:
                         )
                     case NotFound():
                         return SearchResponse(status="not_found")
+
+
+@app.get("/releases/{release_id}", response_model=ReleaseDetailResponse)
+def get_release(release_id: int, http_request: Request) -> ReleaseDetailResponse:
+    engine = http_request.app.state.engine
+    with Session(engine) as session:
+        release = lookup_existing_release(session, ReleaseId(release_id))
+        if release is None:
+            raise HTTPException(status_code=404, detail="Release not found")
+        return _release_detail_response(release)
+
+
+@app.patch("/releases/{release_id}", response_model=ReleaseDetailResponse)
+def edit_release(
+    release_id: int, body: ReleaseEditRequest, http_request: Request
+) -> ReleaseDetailResponse:
+    engine = http_request.app.state.engine
+    with Session(engine) as session:
+        release = lookup_existing_release(session, ReleaseId(release_id))
+        if release is None:
+            raise HTTPException(status_code=404, detail="Release not found")
+        match _apply_release_edit(release, body):
+            case Err(error=message):
+                raise HTTPException(status_code=400, detail=message)
+            case Ok(value=updated):
+                update_release(session, updated)
+                return _release_detail_response(updated)
+
+
+@app.get("/tags", response_model=list[TagCategoryResponse])
+def list_tags_endpoint(http_request: Request) -> list[TagCategoryResponse]:
+    engine = http_request.app.state.engine
+    with Session(engine) as session:
+        return [
+            TagCategoryResponse(
+                id=category.id.value,
+                name=category.name,
+                tags=[
+                    TagResponse(id=tag.id.value, name=tag.name)
+                    for tag in list_tags(session, DEFAULT_USER_ID, category.id)
+                ],
+            )
+            for category in list_tag_categories(session, DEFAULT_USER_ID)
+        ]
+
+
+@app.post("/tags", response_model=TagResponse)
+def create_tag(body: CreateTagRequest, http_request: Request) -> TagResponse:
+    engine = http_request.app.state.engine
+    with Session(engine) as session:
+        category = get_or_create_tag_category(session, DEFAULT_USER_ID, body.category)
+        tag = get_or_create_tag(session, DEFAULT_USER_ID, category.id, body.name)
+        session.commit()
+        return TagResponse(id=tag.id.value, name=tag.name)
+
+
+@app.post("/collection-items", response_model=CollectionItemResponse)
+def create_collection_item(
+    body: CreateCollectionItemRequest, http_request: Request
+) -> CollectionItemResponse:
+    engine = http_request.app.state.engine
+    with Session(engine) as session:
+        release_id = ReleaseId(body.release_id)
+        if lookup_existing_release(session, release_id) is None:
+            raise HTTPException(status_code=404, detail="Release not found")
+        item = CollectionItem(
+            user_id=DEFAULT_USER_ID,
+            release_id=release_id,
+            condition=body.condition,
+            notes=body.notes,
+            date_added=datetime.now(UTC),
+            tag_ids=frozenset(TagId(tag_id) for tag_id in body.tag_ids),
+        )
+        save_collection_item(session, item)
+        return _collection_item_response(item)

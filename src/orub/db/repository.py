@@ -25,3 +25,14 @@ def existing_release(session: Session, release_id: ReleaseId) -> Release | None:
 def save_release(session: Session, release: Release) -> None:
     session.add(release_to_row(release))
     session.commit()
+
+
+def update_release(session: Session, release: Release) -> None:
+    """Overwrite an existing release (and its tracklist) in place.
+
+    Uses `merge` rather than `add` so it upserts by primary key: existing
+    `TrackRow`s are updated, tracks no longer in `release.tracklist` are
+    dropped via `delete-orphan` cascade, and new ones are inserted.
+    """
+    session.merge(release_to_row(release))
+    session.commit()
