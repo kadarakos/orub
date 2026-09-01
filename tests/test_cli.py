@@ -13,7 +13,7 @@ _RELEASE_JSON = {
     "id": 249504,
     "title": "Never Gonna Give You Up",
     "artists": [{"id": 72872, "name": "Rick Astley"}],
-    "labels": [{"id": 895, "name": "RCA"}],
+    "labels": [{"id": 895, "name": "RCA", "catno": "PB 41447"}],
     "year": 1987,
     "formats": [{"name": "Vinyl"}],
     "tracklist": [],
@@ -58,6 +58,7 @@ def test_ingest_release_reports_created() -> None:
 
     assert result.exit_code == 0
     assert "Created: Never Gonna Give You Up" in result.stdout
+    assert "catno=PB 41447" in result.stdout
 
 
 @respx.mock
@@ -135,6 +136,17 @@ def test_search_release_ingests_unique_match() -> None:
 
     assert result.exit_code == 0
     assert "Created: Never Gonna Give You Up" in result.stdout
+
+
+@respx.mock
+def test_search_release_forwards_catno_option() -> None:
+    route = respx.get("https://api.discogs.com/database/search").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+
+    runner.invoke(app, ["search-release", "--catno", "BOO006"])
+
+    assert route.calls.last.request.url.params["catno"] == "BOO006"
 
 
 @respx.mock

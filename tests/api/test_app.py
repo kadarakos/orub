@@ -12,7 +12,7 @@ _RELEASE_JSON = {
     "id": 249504,
     "title": "Never Gonna Give You Up",
     "artists": [{"id": 72872, "name": "Rick Astley"}],
-    "labels": [{"id": 895, "name": "RCA"}],
+    "labels": [{"id": 895, "name": "RCA", "catno": "PB 41447"}],
     "year": 1987,
     "formats": [{"name": "Vinyl"}],
     "tracklist": [],
@@ -72,6 +72,7 @@ def test_search_reports_created(client: TestClient) -> None:
     assert body["status"] == "created"
     assert body["release"]["id"] == 249504
     assert body["release"]["title"] == "Never Gonna Give You Up"
+    assert body["release"]["catno"] == "PB 41447"
 
 
 @respx.mock
@@ -106,6 +107,7 @@ def test_search_reports_ambiguous_match(client: TestClient) -> None:
     body = response.json()
     assert body["status"] == "ambiguous"
     assert [c["id"] for c in body["candidates"]] == [249504, 5453130]
+    assert [c["catno"] for c in body["candidates"]] == ["PB 41447", "5347-7-RAA"]
 
 
 @respx.mock
@@ -133,6 +135,17 @@ def test_search_reports_network_error_as_bad_gateway(client: TestClient) -> None
 
     assert response.status_code == 502
     assert "Network error" in response.json()["detail"]
+
+
+@respx.mock
+def test_search_forwards_catno_to_discogs_search(client: TestClient) -> None:
+    route = respx.get("https://api.discogs.com/database/search").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+
+    client.post("/releases/search", json={"catno": "BOO006"})
+
+    assert route.calls.last.request.url.params["catno"] == "BOO006"
 
 
 @respx.mock

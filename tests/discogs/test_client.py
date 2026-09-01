@@ -156,6 +156,7 @@ def test_search_releases_sends_query_params() -> None:
         artist="Rick Astley",
         label="RCA",
         year=1987,
+        catno="PB 41447",
     )
 
     sent = route.calls.last.request.url.params
@@ -165,6 +166,7 @@ def test_search_releases_sends_query_params() -> None:
     assert sent["artist"] == "Rick Astley"
     assert sent["label"] == "RCA"
     assert sent["year"] == "1987"
+    assert sent["catno"] == "PB 41447"
 
 
 @respx.mock

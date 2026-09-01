@@ -23,7 +23,7 @@ _DTO = DiscogsReleaseDTO(
     id=249504,
     title="Never Gonna Give You Up",
     artists=[DiscogsArtistDTO(id=72872, name="Rick Astley")],
-    labels=[DiscogsLabelDTO(id=895, name="RCA")],
+    labels=[DiscogsLabelDTO(id=895, name="RCA", catno="PB 41447")],
     year=1987,
     formats=[DiscogsFormatDTO(name="Vinyl")],
     tracklist=[],
@@ -36,6 +36,7 @@ _EXPECTED_RELEASE = Release(
     year=1987,
     format=RecordFormat.VINYL,
     tracklist=(),
+    catno="PB 41447",
 )
 
 

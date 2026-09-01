@@ -16,7 +16,7 @@ def _release_dto(**overrides: object) -> DiscogsReleaseDTO:
         "id": 249504,
         "title": "Never Gonna Give You Up",
         "artists": [DiscogsArtistDTO(id=72872, name="Rick Astley")],
-        "labels": [DiscogsLabelDTO(id=895, name="RCA")],
+        "labels": [DiscogsLabelDTO(id=895, name="RCA", catno="PB 41447")],
         "year": 1987,
         "formats": [DiscogsFormatDTO(name="Vinyl")],
         "tracklist": [
@@ -38,6 +38,15 @@ def test_maps_release_fields() -> None:
     assert release.label_id == LabelId(895)
     assert release.year == 1987
     assert release.format == RecordFormat.VINYL
+    assert release.catno == "PB 41447"
+
+
+def test_missing_catno_stays_none() -> None:
+    dto = _release_dto(labels=[DiscogsLabelDTO(id=895, name="RCA")])
+    result = release_from_dto(dto)
+
+    assert isinstance(result, Ok)
+    assert result.value.catno is None
 
 
 def test_maps_tracklist_inheriting_release_artists() -> None:

@@ -13,8 +13,8 @@ module Page.Search exposing
 import Api
 import Dict exposing (Dict)
 import Html exposing (Html, a, button, div, form, input, label, span, table, tbody, td, text, th, thead, tr)
-import Html.Attributes exposing (class, href, placeholder, rel, target, type_, value)
-import Html.Events exposing (onClick, onInput, onSubmit)
+import Html.Attributes exposing (accept, attribute, class, for, href, id, placeholder, rel, style, target, type_, value)
+import Html.Events exposing (on, onClick, onInput, onSubmit)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -31,6 +31,7 @@ type alias Model =
     , artist : String
     , label : String
     , year : String
+    , catno : String
     , status : Status
     , candidateStates : Dict Int RowState
     }
@@ -63,6 +64,7 @@ type alias Release =
     , title : String
     , year : Maybe Int
     , format : String
+    , catno : Maybe String
     }
 
 
@@ -72,6 +74,7 @@ type alias Candidate =
     , year : Maybe Int
     , label : List String
     , format : List String
+    , catno : Maybe String
     }
 
 
@@ -82,6 +85,7 @@ init =
       , artist = ""
       , label = ""
       , year = ""
+      , catno = ""
       , status = Idle
       , candidateStates = Dict.empty
       }
@@ -126,21 +130,28 @@ suggestedTagIdsDecoder =
 
 releaseDecoder : Decoder Release
 releaseDecoder =
-    Decode.map4 Release
+    Decode.map5 Release
         (Decode.field "id" Decode.int)
         (Decode.field "title" Decode.string)
         (Decode.field "year" (Decode.nullable Decode.int))
         (Decode.field "format" Decode.string)
+        catnoDecoder
 
 
 candidateDecoder : Decoder Candidate
 candidateDecoder =
-    Decode.map5 Candidate
+    Decode.map6 Candidate
         (Decode.field "id" Decode.int)
         (Decode.field "title" Decode.string)
         (Decode.field "year" (Decode.nullable Decode.int))
         (Decode.field "label" (Decode.list Decode.string))
         (Decode.field "format" (Decode.list Decode.string))
+        catnoDecoder
+
+
+catnoDecoder : Decoder (Maybe String)
+catnoDecoder =
+    Decode.maybe (Decode.field "catno" Decode.string)
 
 
 encodeRequest : Model -> Encode.Value
@@ -152,6 +163,7 @@ encodeRequest model =
             , encodeField "artist" Encode.string (Util.nonEmpty model.artist)
             , encodeField "label" Encode.string (Util.nonEmpty model.label)
             , encodeField "year" Encode.int (String.toInt (String.trim model.year))
+            , encodeField "catno" Encode.string (Util.nonEmpty model.catno)
             ]
         )
 
@@ -171,6 +183,8 @@ type Msg
     | ArtistChanged String
     | LabelChanged String
     | YearChanged String
+    | CatnoChanged String
+    | PhotoCaptured
     | Submit
     | GotResponse (Result Http.Error SearchResult)
     | AddCandidate Int
@@ -195,6 +209,15 @@ update msg model =
 
         YearChanged v ->
             ( { model | year = v }, Cmd.none )
+
+        CatnoChanged v ->
+            ( { model | catno = v }, Cmd.none )
+
+        PhotoCaptured ->
+            -- No OCR yet: taking a photo just runs the search as-is, to
+            -- validate the capture -> search flow before wiring up real
+            -- catno extraction from the image.
+            update Submit model
 
         Submit ->
             ( { model | status = Loading, candidateStates = Dict.empty }, postSearch model )
@@ -287,7 +310,25 @@ viewForm model =
         , viewField "artist" model.artist ArtistChanged "text"
         , viewField "label" model.label LabelChanged "text"
         , viewField "year" model.year YearChanged "number"
+        , viewField "catno" model.catno CatnoChanged "text"
+        , viewScanControl
         , button [ class "submit-btn", type_ "submit" ] [ text "search" ]
+        ]
+
+
+viewScanControl : Html Msg
+viewScanControl =
+    div [ class "field" ]
+        [ label [ class "submit-btn scan-btn", for "scan-input" ] [ text "📷 scan label" ]
+        , input
+            [ id "scan-input"
+            , type_ "file"
+            , accept "image/*"
+            , attribute "capture" "environment"
+            , style "display" "none"
+            , on "change" (Decode.succeed PhotoCaptured)
+            ]
+            []
         ]
 
 
@@ -367,7 +408,21 @@ viewRelease release =
     div [ class "release" ]
         [ span [ class "release-title" ] [ text release.title ]
         , span [ class "release-meta" ]
-            [ text (Maybe.withDefault "?" (Maybe.map String.fromInt release.year) ++ " · " ++ release.format ++ " · id=" ++ String.fromInt release.id) ]
+            [ text
+                (Maybe.withDefault "?" (Maybe.map String.fromInt release.year)
+                    ++ " · "
+                    ++ release.format
+                    ++ (case release.catno of
+                            Just catno ->
+                                " · catno=" ++ catno
+
+                            Nothing ->
+                                ""
+                       )
+                    ++ " · id="
+                    ++ String.fromInt release.id
+                )
+            ]
         ]
 
 
@@ -381,6 +436,7 @@ viewCandidateTable candidates candidateStates =
                 , th [] [ text "year" ]
                 , th [] [ text "label" ]
                 , th [] [ text "format" ]
+                , th [] [ text "catno" ]
                 , th [] [ text "add" ]
                 , th [] [ text "discogs" ]
                 ]
@@ -404,6 +460,7 @@ viewCandidateRow candidate rowState =
         , td [] [ text (Maybe.withDefault "—" (Maybe.map String.fromInt candidate.year)) ]
         , td [] [ text (String.join ", " (List.take 2 candidate.label)) ]
         , td [] [ text (String.join ", " (List.take 2 candidate.format)) ]
+        , td [] [ text (Maybe.withDefault "—" candidate.catno) ]
         , td [] [ viewAddCell candidate.id rowState ]
         , td []
             [ a

@@ -82,6 +82,7 @@ def release_from_dto(dto: DiscogsReleaseDTO) -> Result[Release, str]:
             year=dto.year,
             format=record_format,
             tracklist=tracklist,
+            catno=dto.labels[0].catno,
         )
     )
 

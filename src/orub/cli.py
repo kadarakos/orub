@@ -41,14 +41,16 @@ def _open_session(settings: Settings) -> Session:
 
 def _describe_release(release: Release) -> str:
     year = release.year if release.year is not None else "?"
-    return f"{release.title} ({year}, {release.format.value}) [id={release.id.value}]"
+    catno = f", catno={release.catno}" if release.catno is not None else ""
+    return f"{release.title} ({year}, {release.format.value}{catno}) [id={release.id.value}]"
 
 
 def _describe_candidate(candidate: DiscogsSearchResultDTO) -> str:
     year = candidate.year if candidate.year is not None else "?"
     label = ", ".join(candidate.label) or "unknown label"
     fmt = ", ".join(candidate.format) or "unknown format"
-    return f"{candidate.title} ({year}, {fmt}, {label}) [id={candidate.id}]"
+    catno = f", catno={candidate.catno}" if candidate.catno is not None else ""
+    return f"{candidate.title} ({year}, {fmt}, {label}{catno}) [id={candidate.id}]"
 
 
 def _echo_fetch_error(error: FetchError) -> None:
@@ -104,6 +106,7 @@ def search_release(
     artist: str | None = None,
     label: str | None = None,
     year: int | None = None,
+    catno: str | None = None,
 ) -> None:
     """Search Discogs and ingest the full release on a unique match.
 
@@ -117,6 +120,7 @@ def search_release(
         artist=artist,
         label=label,
         year=year,
+        catno=catno,
     )
 
     with (
@@ -135,6 +139,7 @@ def search_release(
                 artist=query.artist,
                 label=query.label,
                 year=query.year,
+                catno=query.catno,
             )
 
         result = ingest_release_by_search(

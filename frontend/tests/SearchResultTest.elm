@@ -26,7 +26,7 @@ suite =
                     |> Expect.equal
                         (Ok
                             (Created
-                                { id = 1, title = "Feed Me Weird Things", year = Just 1997, format = "vinyl" }
+                                { id = 1, title = "Feed Me Weird Things", year = Just 1997, format = "vinyl", catno = Nothing }
                                 [ 1, 2 ]
                             )
                         )
@@ -42,7 +42,23 @@ suite =
                     |> Expect.equal
                         (Ok
                             (Created
-                                { id = 1, title = "Feed Me Weird Things", year = Nothing, format = "vinyl" }
+                                { id = 1, title = "Feed Me Weird Things", year = Nothing, format = "vinyl", catno = Nothing }
+                                []
+                            )
+                        )
+        , test "decodes created with a catno on the release" <|
+            \_ ->
+                decode
+                    """
+                    { "status": "created"
+                    , "release": {"id": 1, "title": "Feed Me Weird Things", "year": 1997, "format": "vinyl", "catno": "BOO006"}
+                    , "suggested_tag_ids": null
+                    }
+                    """
+                    |> Expect.equal
+                        (Ok
+                            (Created
+                                { id = 1, title = "Feed Me Weird Things", year = Just 1997, format = "vinyl", catno = Just "BOO006" }
                                 []
                             )
                         )
@@ -58,7 +74,7 @@ suite =
                     |> Expect.equal
                         (Ok
                             (AlreadyExists
-                                { id = 2, title = "Squarepusher", year = Just 2001, format = "cd" }
+                                { id = 2, title = "Squarepusher", year = Just 2001, format = "cd", catno = Nothing }
                                 []
                             )
                         )
@@ -68,7 +84,7 @@ suite =
                     """
                     { "status": "ambiguous"
                     , "candidates":
-                        [ {"id": 3, "title": "A", "year": 2000, "label": ["L1"], "format": ["Vinyl"]}
+                        [ {"id": 3, "title": "A", "year": 2000, "label": ["L1"], "format": ["Vinyl"], "catno": "BOO006"}
                         , {"id": 4, "title": "B", "year": null, "label": [], "format": ["CD"]}
                         ]
                     }
@@ -76,8 +92,8 @@ suite =
                     |> Expect.equal
                         (Ok
                             (Ambiguous
-                                [ { id = 3, title = "A", year = Just 2000, label = [ "L1" ], format = [ "Vinyl" ] }
-                                , { id = 4, title = "B", year = Nothing, label = [], format = [ "CD" ] }
+                                [ { id = 3, title = "A", year = Just 2000, label = [ "L1" ], format = [ "Vinyl" ], catno = Just "BOO006" }
+                                , { id = 4, title = "B", year = Nothing, label = [], format = [ "CD" ], catno = Nothing }
                                 ]
                             )
                         )

@@ -44,6 +44,18 @@ def test_release_holds_tracklist_and_label_reference() -> None:
     assert release.label_id == LabelId(1)
 
 
+def test_release_catno_defaults_to_none() -> None:
+    release = Release(
+        id=ReleaseId(1),
+        title="Some Release",
+        label_id=LabelId(1),
+        year=1998,
+        format=RecordFormat.VINYL,
+        tracklist=(),
+    )
+    assert release.catno is None
+
+
 def test_catalog_entities_are_frozen_and_compare_by_value() -> None:
     assert Artist(ArtistId(1), "Some Artist") == Artist(ArtistId(1), "Some Artist")
     assert Label(LabelId(1), "Some Label") == Label(LabelId(1), "Some Label")

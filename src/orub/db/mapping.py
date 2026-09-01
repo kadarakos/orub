@@ -58,6 +58,7 @@ def release_to_row(release: Release) -> ReleaseRow:
         label_id=release.label_id.value,
         year=release.year,
         format=release.format.value,
+        catno=release.catno,
         tracks=[_track_to_row(track) for track in release.tracklist],
     )
 
@@ -70,6 +71,7 @@ def release_from_row(row: ReleaseRow) -> Release:
         label_id=LabelId(row.label_id),
         year=row.year,
         format=RecordFormat(row.format),
+        catno=row.catno,
         tracklist=tuple(_track_from_row(track, release_id) for track in row.tracks),
     )
 

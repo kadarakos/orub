@@ -44,3 +44,4 @@ class Release:
     year: int | None
     format: RecordFormat
     tracklist: tuple[Track, ...]
+    catno: str | None = None

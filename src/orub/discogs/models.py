@@ -19,6 +19,7 @@ class DiscogsArtistDTO(BaseModel):
 class DiscogsLabelDTO(BaseModel):
     id: int
     name: str
+    catno: str | None = None
 
 
 class DiscogsFormatDTO(BaseModel):

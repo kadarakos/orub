@@ -86,6 +86,7 @@ class SearchRequest(BaseModel):
     artist: str | None = None
     label: str | None = None
     year: int | None = None
+    catno: str | None = None
 
 
 class ReleaseResponse(BaseModel):
@@ -93,6 +94,7 @@ class ReleaseResponse(BaseModel):
     title: str
     year: int | None
     format: str
+    catno: str | None
 
 
 class CandidateResponse(BaseModel):
@@ -101,6 +103,7 @@ class CandidateResponse(BaseModel):
     year: int | None
     label: list[str]
     format: list[str]
+    catno: str | None
 
 
 class SearchResponse(BaseModel):
@@ -122,6 +125,7 @@ class ReleaseDetailResponse(BaseModel):
     title: str
     year: int | None
     format: str
+    catno: str | None
     tracks: list[TrackResponse]
 
 
@@ -169,7 +173,11 @@ class CollectionItemResponse(BaseModel):
 
 def _release_response(release: Release) -> ReleaseResponse:
     return ReleaseResponse(
-        id=release.id.value, title=release.title, year=release.year, format=release.format.value
+        id=release.id.value,
+        title=release.title,
+        year=release.year,
+        format=release.format.value,
+        catno=release.catno,
     )
 
 
@@ -179,6 +187,7 @@ def _release_detail_response(release: Release) -> ReleaseDetailResponse:
         title=release.title,
         year=release.year,
         format=release.format.value,
+        catno=release.catno,
         tracks=[
             TrackResponse(
                 position=track.id.position.value,
@@ -227,6 +236,7 @@ def _candidate_response(candidate: DiscogsSearchResultDTO) -> CandidateResponse:
         year=candidate.year,
         label=candidate.label,
         format=candidate.format,
+        catno=candidate.catno,
     )
 
 
@@ -252,6 +262,7 @@ def search_release(body: SearchRequest, http_request: Request) -> SearchResponse
         artist=body.artist,
         label=body.label,
         year=body.year,
+        catno=body.catno,
     )
 
     with (
@@ -270,6 +281,7 @@ def search_release(body: SearchRequest, http_request: Request) -> SearchResponse
                 artist=query.artist,
                 label=query.label,
                 year=query.year,
+                catno=query.catno,
             )
 
         result = ingest_release_by_search(

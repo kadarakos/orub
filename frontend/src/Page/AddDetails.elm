@@ -43,6 +43,7 @@ type alias ReleaseDetail =
     , title : String
     , year : Maybe Int
     , format : String
+    , catno : Maybe String
     , tracks : List TrackDetail
     }
 
@@ -136,11 +137,12 @@ init releaseId suggestedTagIds =
 
 releaseDetailDecoder : Decoder ReleaseDetail
 releaseDetailDecoder =
-    Decode.map5 ReleaseDetail
+    Decode.map6 ReleaseDetail
         (Decode.field "id" Decode.int)
         (Decode.field "title" Decode.string)
         (Decode.field "year" (Decode.nullable Decode.int))
         (Decode.field "format" Decode.string)
+        (Decode.maybe (Decode.field "catno" Decode.string))
         (Decode.field "tracks" (Decode.list trackDetailDecoder))
 
 
@@ -445,6 +447,7 @@ view details =
             RDLoaded release ->
                 div [ class "panel add-details" ]
                     [ h2 [ class "release-title" ] [ text release.title ]
+                    , viewCatno release.catno
                     , viewYearField details.yearInput
                     , viewTracksTable release.tracks details.trackEdits
                     , viewConditionField details.condition
@@ -453,6 +456,16 @@ view details =
                     , viewSaveArea details.saveStatus
                     ]
         ]
+
+
+viewCatno : Maybe String -> Html Msg
+viewCatno catno =
+    case catno of
+        Just catnoValue ->
+            div [ class "dim" ] [ text ("catno=" ++ catnoValue) ]
+
+        Nothing ->
+            text ""
 
 
 viewYearField : String -> Html Msg

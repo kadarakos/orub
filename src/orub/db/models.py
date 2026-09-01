@@ -41,6 +41,7 @@ class ReleaseRow(Base):
     label_id: Mapped[int]
     year: Mapped[int | None]
     format: Mapped[str]
+    catno: Mapped[str | None]
 
     tracks: Mapped[list[TrackRow]] = relationship(
         back_populates="release", cascade="all, delete-orphan", order_by="TrackRow.position"

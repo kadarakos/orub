@@ -29,6 +29,7 @@ _RELEASE = Release(
     label_id=LabelId(895),
     year=1987,
     format=RecordFormat.VINYL,
+    catno="PB 41447",
     tracklist=(
         Track(
             id=TrackId(release_id=ReleaseId(249504), position=TrackPosition("A1")),

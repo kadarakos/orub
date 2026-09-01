@@ -76,6 +76,7 @@ class DiscogsClient:
         artist: str | None = None,
         label: str | None = None,
         year: int | None = None,
+        catno: str | None = None,
     ) -> Result[tuple[DiscogsSearchResultDTO, ...], FetchError]:
         params: dict[str, str] = {"type": "release"}
         if release_title is not None:
@@ -88,6 +89,8 @@ class DiscogsClient:
             params["label"] = label
         if year is not None:
             params["year"] = str(year)
+        if catno is not None:
+            params["catno"] = catno
 
         match self._get("/database/search", params=params):
             case Err() as err:

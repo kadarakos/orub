@@ -41,6 +41,7 @@ class ReleaseSearchQuery:
     artist: str | None = None
     label: str | None = None
     year: int | None = None
+    catno: str | None = None
 
 
 @attrs.frozen(slots=True)
