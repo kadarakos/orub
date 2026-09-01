@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "elm-live src/Main.elm --open -- --output=main.js",
-    "build": "elm make src/Main.elm --optimize --output=main.js"
+    "build": "elm make src/Main.elm --optimize --output=main.js",
+    "test": "elm-test"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +14,7 @@
   "devDependencies": {
     "elm": "^0.19.2-0",
     "elm-format": "^0.8.8",
-    "elm-live": "^4.0.2"
+    "elm-live": "^4.0.2",
+    "elm-test": "^0.19.2-1"
   }
 }
