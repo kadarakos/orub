@@ -162,6 +162,20 @@ since they need users/auth to mean anything yet.
 - [ ] Page/model structure
 - [ ] JSON decoders/encoders matching the API contract
 - [ ] Decide hand-written vs. generated client code
+- [x] Server-side OCR for the catno scan control (2026-09-02): `src/orub/ocr/`
+      (`extract.py` impure tesseract call returning `Result[str, OcrError]`,
+      `parse.py` pure whitespace cleanup — same pure-core/impure-edge split as
+      `discogs/`), `POST /ocr/scan` (multipart upload, returns
+      `{catno, raw_text}`). Assumes a clean close-up shot of just the catno
+      (user's framing choice) rather than parsing a full noisy label photo.
+      Elm: `Page/Search.elm`'s scan button now uploads the captured `File` via
+      `Http.filePart` instead of the old capture→Submit bypass, and fills the
+      `catno` field when found (still user-editable/reviewable before
+      search); `raw_text` is shown on no-match so OCR quality can be eyeballed
+      against real photos. No camera-overlay/guide-box UI (would need
+      `getUserMedia` + `<video>` + canvas instead of the current native-camera
+      `<input capture>`, a bigger rewire — deferred, user's call, revisit only
+      if plain photos prove hard to frame in practice).
 
 ## Phase 8 — Deployment (design doc §7, §8)
 

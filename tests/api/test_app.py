@@ -1,3 +1,4 @@
+import io
 import pathlib
 from collections.abc import Generator
 
@@ -5,6 +6,7 @@ import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw, ImageFont
 
 from orub.api.app import app
 
@@ -333,3 +335,34 @@ def test_create_collection_item_returns_404_for_unknown_release() -> None:
         )
 
     assert response.status_code == 404
+
+
+def _catno_image_bytes(text: str) -> bytes:
+    image = Image.new("RGB", (400, 120), color="white")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=60)
+    draw.text((20, 20), text, fill="black", font=font)
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_scan_label_extracts_catno_from_a_clear_image(client: TestClient) -> None:
+    response = client.post(
+        "/ocr/scan",
+        files={"image": ("catno.png", _catno_image_bytes("XL152"), "image/png")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["catno"] == "XL152"
+    assert "XL152" in body["raw_text"]
+
+
+def test_scan_label_rejects_non_image_upload(client: TestClient) -> None:
+    response = client.post(
+        "/ocr/scan",
+        files={"image": ("not-an-image.txt", b"not an image", "text/plain")},
+    )
+
+    assert response.status_code == 400

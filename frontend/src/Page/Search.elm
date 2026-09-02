@@ -12,6 +12,7 @@ module Page.Search exposing
 
 import Api
 import Dict exposing (Dict)
+import File exposing (File)
 import Html exposing (Html, a, button, div, form, input, label, span, table, tbody, td, text, th, thead, tr)
 import Html.Attributes exposing (accept, attribute, class, for, href, id, placeholder, rel, style, target, type_, value)
 import Html.Events exposing (on, onClick, onInput, onSubmit)
@@ -34,6 +35,7 @@ type alias Model =
     , catno : String
     , status : Status
     , candidateStates : Dict Int RowState
+    , scanStatus : ScanStatus
     }
 
 
@@ -42,6 +44,19 @@ type Status
     | Loading
     | Loaded SearchResult
     | Failed String
+
+
+type ScanStatus
+    = NotScanning
+    | Scanning
+    | Scanned OcrResult
+    | ScanFailed String
+
+
+type alias OcrResult =
+    { catno : Maybe String
+    , rawText : String
+    }
 
 
 type RowState
@@ -88,6 +103,7 @@ init =
       , catno = ""
       , status = Idle
       , candidateStates = Dict.empty
+      , scanStatus = NotScanning
       }
     , Cmd.none
     )
@@ -154,6 +170,13 @@ catnoDecoder =
     Decode.maybe (Decode.field "catno" Decode.string)
 
 
+ocrResultDecoder : Decoder OcrResult
+ocrResultDecoder =
+    Decode.map2 OcrResult
+        (Decode.field "catno" (Decode.nullable Decode.string))
+        (Decode.field "raw_text" Decode.string)
+
+
 encodeRequest : Model -> Encode.Value
 encodeRequest model =
     Encode.object
@@ -184,7 +207,8 @@ type Msg
     | LabelChanged String
     | YearChanged String
     | CatnoChanged String
-    | PhotoCaptured
+    | PhotoCaptured File
+    | GotOcrResponse (Result Http.Error OcrResult)
     | Submit
     | GotResponse (Result Http.Error SearchResult)
     | AddCandidate Int
@@ -213,11 +237,19 @@ update msg model =
         CatnoChanged v ->
             ( { model | catno = v }, Cmd.none )
 
-        PhotoCaptured ->
-            -- No OCR yet: taking a photo just runs the search as-is, to
-            -- validate the capture -> search flow before wiring up real
-            -- catno extraction from the image.
-            update Submit model
+        PhotoCaptured file ->
+            ( { model | scanStatus = Scanning }, postOcrScan file )
+
+        GotOcrResponse (Ok result) ->
+            ( { model
+                | scanStatus = Scanned result
+                , catno = Maybe.withDefault model.catno result.catno
+              }
+            , Cmd.none
+            )
+
+        GotOcrResponse (Err error) ->
+            ( { model | scanStatus = ScanFailed (Api.httpErrorToString error) }, Cmd.none )
 
         Submit ->
             ( { model | status = Loading, candidateStates = Dict.empty }, postSearch model )
@@ -276,6 +308,15 @@ postSearch model =
         }
 
 
+postOcrScan : File -> Cmd Msg
+postOcrScan file =
+    Http.post
+        { url = Api.apiBaseUrl ++ "/ocr/scan"
+        , body = Http.multipartBody [ Http.filePart "image" file ]
+        , expect = Http.expectJson GotOcrResponse ocrResultDecoder
+        }
+
+
 postIngest : Int -> Cmd Msg
 postIngest candidateId =
     Http.post
@@ -311,13 +352,13 @@ viewForm model =
         , viewField "label" model.label LabelChanged "text"
         , viewField "year" model.year YearChanged "number"
         , viewField "catno" model.catno CatnoChanged "text"
-        , viewScanControl
+        , viewScanControl model.scanStatus
         , button [ class "submit-btn", type_ "submit" ] [ text "search" ]
         ]
 
 
-viewScanControl : Html Msg
-viewScanControl =
+viewScanControl : ScanStatus -> Html Msg
+viewScanControl scanStatus =
     div [ class "field" ]
         [ label [ class "submit-btn scan-btn", for "scan-input" ] [ text "📷 scan label" ]
         , input
@@ -326,10 +367,50 @@ viewScanControl =
             , accept "image/*"
             , attribute "capture" "environment"
             , style "display" "none"
-            , on "change" (Decode.succeed PhotoCaptured)
+            , on "change" capturedFileDecoder
             ]
             []
+        , viewScanStatus scanStatus
         ]
+
+
+capturedFileDecoder : Decoder Msg
+capturedFileDecoder =
+    Decode.at [ "target", "files" ] (Decode.list File.decoder)
+        |> Decode.andThen
+            (\files ->
+                case files of
+                    file :: _ ->
+                        Decode.succeed (PhotoCaptured file)
+
+                    [] ->
+                        Decode.fail "no file selected"
+            )
+
+
+viewScanStatus : ScanStatus -> Html Msg
+viewScanStatus scanStatus =
+    case scanStatus of
+        NotScanning ->
+            text ""
+
+        Scanning ->
+            span [ class "dim" ] [ text "scanning_" ]
+
+        ScanFailed message ->
+            span [ class "dim error" ] [ text message ]
+
+        Scanned result ->
+            span [ class "dim" ]
+                [ text
+                    (case result.catno of
+                        Just catno ->
+                            "read catno: " ++ catno
+
+                        Nothing ->
+                            "no catno found (raw: " ++ result.rawText ++ ")"
+                    )
+                ]
 
 
 viewField : String -> String -> (String -> Msg) -> String -> Html Msg

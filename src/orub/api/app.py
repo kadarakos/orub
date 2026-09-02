@@ -19,10 +19,10 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 import attrs
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -49,6 +49,8 @@ from orub.domain.ingest_outcome import AlreadyExists, AmbiguousMatch, Created, N
 from orub.domain.result import Err, Ok, Result
 from orub.domain.sums import Bpm, Condition, MusicalKey
 from orub.domain.user import DEFAULT_USER_ID, CollectionItem
+from orub.ocr.extract import run_ocr
+from orub.ocr.parse import parse_catno
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +163,11 @@ class CreateCollectionItemRequest(BaseModel):
     condition: Condition
     notes: str = ""
     tag_ids: list[int] = []
+
+
+class OcrScanResponse(BaseModel):
+    catno: str | None
+    raw_text: str
 
 
 class CollectionItemResponse(BaseModel):
@@ -401,6 +408,16 @@ def edit_release(
             case Ok(value=updated):
                 update_release(session, updated)
                 return _release_detail_response(updated)
+
+
+@app.post("/ocr/scan", response_model=OcrScanResponse)
+async def scan_label(image: Annotated[UploadFile, File()]) -> OcrScanResponse:
+    image_bytes = await image.read()
+    match run_ocr(image_bytes):
+        case Err(error=error):
+            raise HTTPException(status_code=400, detail=f"Invalid image: {error.message}")
+        case Ok(value=raw_text):
+            return OcrScanResponse(catno=parse_catno(raw_text), raw_text=raw_text)
 
 
 @app.get("/tags", response_model=list[TagCategoryResponse])

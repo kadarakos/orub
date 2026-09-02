@@ -7,18 +7,29 @@ import Test exposing (Test, describe, test)
 
 suite : Test
 suite =
-    describe "PhotoCaptured"
-        [ test "runs the search as-is, same as Submit, since there's no OCR yet" <|
+    describe "OCR scan result handling"
+        [ test "a scanned catno fills the catno field" <|
             \_ ->
                 let
                     ( initialModel, _ ) =
                         Search.init
 
-                    ( fromPhoto, _ ) =
-                        Search.update Search.PhotoCaptured initialModel
-
-                    ( fromSubmit, _ ) =
-                        Search.update Search.Submit initialModel
+                    ( updated, _ ) =
+                        Search.update
+                            (Search.GotOcrResponse (Ok { catno = Just "XL152", rawText = "XL152\n" }))
+                            initialModel
                 in
-                Expect.equal fromPhoto fromSubmit
+                Expect.equal updated.catno "XL152"
+        , test "no catno detected leaves the catno field untouched" <|
+            \_ ->
+                let
+                    ( initialModel, _ ) =
+                        Search.init
+
+                    ( updated, _ ) =
+                        Search.update
+                            (Search.GotOcrResponse (Ok { catno = Nothing, rawText = "???\n" }))
+                            initialModel
+                in
+                Expect.equal updated.catno initialModel.catno
         ]
